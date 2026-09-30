@@ -1,0 +1,370 @@
+:root {
+    --primary: #1565c0;
+    --primary-hover: #0d47a1;
+    --primary-active: #0a3c86;
+    --correct: #1b5e20;
+    --incorrect: #b71c1c;
+    --bg: #eef2f1;
+    --card-bg: #ffffff;
+    --text-color: #1f2933;
+    --muted: #52606d;
+    --pending: #3d4a54;
+    --line: #d9e2ec;
+    --current-bg: #e3f2fd;
+    --stats-bg: #e8f2fc;
+    --radius: 12px;
+    --focus: 0 0 0 3px rgba(21, 101, 192, 0.4);
+    --shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background-color: var(--bg);
+    color: var(--text-color);
+    margin: 0;
+    padding: 32px 16px 48px;
+    line-height: 1.5;
+}
+
+.container {
+    background-color: var(--card-bg);
+    padding: 28px 24px 24px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+h1 {
+    text-align: center;
+    color: var(--primary);
+    margin: 0 0 8px;
+    font-size: clamp(1.6rem, 3vw, 2rem);
+    line-height: 1.25;
+}
+
+.lede {
+    text-align: center;
+    color: var(--muted);
+    margin: 0 auto 24px;
+    max-width: 38rem;
+}
+
+.controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+    align-items: flex-end;
+}
+
+.actions {
+    display: flex;
+    gap: 8px;
+}
+
+.lesson-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 0;
+    margin: 0 0 16px;
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.lesson-meta span:not(:last-child)::after {
+    content: "·";
+    margin: 0 0.55rem;
+    color: #90a4ae;
+}
+
+.field {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.field label {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+select,
+button {
+    font: inherit;
+    min-height: 44px;
+    border-radius: 8px;
+}
+
+select {
+    padding: 8px 12px;
+    font-size: 1rem;
+    border: 1px solid #b0bec5;
+    background: #fff;
+    width: 100%;
+    cursor: pointer;
+}
+
+button {
+    padding: 8px 18px;
+    font-size: 1rem;
+    background-color: var(--primary);
+    color: #fff;
+    border: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+button:hover {
+    background-color: var(--primary-hover);
+}
+
+button:active {
+    background-color: var(--primary-active);
+}
+
+button:focus-visible,
+select:focus-visible,
+.typing-capture:focus-visible,
+.overlay:focus-visible {
+    outline: none;
+    box-shadow: var(--focus);
+}
+
+button.secondary {
+    background: #fff;
+    color: var(--primary);
+    border-color: #90caf9;
+}
+
+button.secondary:hover {
+    background: #e3f2fd;
+}
+
+button.secondary:active {
+    background: #bbdefb;
+}
+
+button:disabled,
+button.secondary:disabled {
+    background: #eceff1;
+    color: #90a4ae;
+    border-color: transparent;
+    cursor: not-allowed;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    background: var(--stats-bg);
+    padding: 14px 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+.stat-box {
+    text-align: center;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.stat-value {
+    display: block;
+    color: var(--primary);
+    font-size: clamp(1.4rem, 3vw, 1.7rem);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+}
+
+.progress-track {
+    height: 8px;
+    background: #d6e4f0;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0;
+    background: var(--primary);
+    border-radius: inherit;
+}
+
+.typing-area {
+    font-family: Consolas, "Courier New", ui-monospace, monospace;
+    font-size: clamp(1.15rem, 2.4vw, 1.6rem);
+    line-height: 1.7;
+    padding: 20px;
+    border: 2px solid var(--line);
+    border-radius: 8px;
+    background: #fafafa;
+    min-height: 160px;
+    overflow: visible;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    position: relative;
+    cursor: text;
+}
+
+.typing-area.is-active {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(21, 101, 192, 0.16);
+}
+
+.char {
+    color: var(--pending);
+    border-radius: 3px;
+    white-space: pre-wrap;
+}
+
+.char.correct {
+    color: var(--correct);
+}
+
+.char.incorrect {
+    color: #fff;
+    background-color: var(--incorrect);
+}
+
+.char.space.incorrect,
+.char.space.current {
+    display: inline-block;
+    min-width: 0.55em;
+}
+
+.char.current {
+    background-color: var(--current-bg);
+    color: #0d2137;
+    box-shadow: inset 0 -3px 0 var(--primary);
+}
+
+.overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    margin: 0;
+    background: #fafafa;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 24px;
+    font-size: clamp(1.05rem, 2.5vw, 1.4rem);
+    font-weight: 700;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    color: var(--primary);
+    cursor: pointer;
+    border: 0;
+    border-radius: 6px;
+}
+
+.overlay-done {
+    background: rgba(255, 255, 255, 0.94);
+    color: var(--correct);
+}
+
+.hidden {
+    display: none !important;
+}
+
+.instruction {
+    text-align: center;
+    margin: 16px 0 0;
+    color: var(--muted);
+}
+
+.typing-capture {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.debug-panel {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: #263238;
+    color: #eceff1;
+    font-family: Consolas, ui-monospace, monospace;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+}
+
+@media (max-width: 640px) {
+    body {
+        padding: 16px 12px 32px;
+    }
+
+    .container {
+        padding: 20px 14px 16px;
+    }
+
+    .controls,
+    .actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .actions {
+        width: 100%;
+        flex-direction: row;
+    }
+
+    .actions button {
+        flex: 1;
+        width: auto;
+        white-space: normal;
+    }
+
+    .stats {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .stat-label {
+        font-size: 0.8rem;
+    }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition: none !important;
+        animation: none !important;
+    }
+}
