@@ -4,24 +4,42 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Literární psaní všemi deseti</title>
+    <script>
+        try {
+            var savedTheme = localStorage.getItem("theme");
+            var theme = savedTheme === "light" || savedTheme === "dark"
+                ? savedTheme
+                : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+            document.documentElement.dataset.theme = theme;
+        } catch (error) {
+            document.documentElement.dataset.theme = "light";
+        }
+    </script>
     <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
     <main class="container">
+        <div class="topbar">
+            <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="false">
+                <span class="label-to-dark">Tmavý režim</span>
+                <span class="label-to-light">Světlý režim</span>
+            </button>
+        </div>
         <h1>Literární psaní všemi deseti</h1>
-        <p class="lede">Osm maturitních knih, u každé čtyři lekce o době, žánru a literárním kontextu.</p>
+        <p class="lede">Vyberte autora. Jeho kapitoly jdou za sebou samy a po poslední pokračuje další autor.</p>
 
         <div class="controls">
             <div class="field">
-                <label for="lessonSelect">Lekce</label>
-                <select id="lessonSelect"></select>
+                <label for="authorSelect">Autor</label>
+                <select id="authorSelect"></select>
             </div>
             <div class="actions">
-                <button type="button" id="nextBtn">Další lekce</button>
+                <button type="button" id="skipBtn" class="secondary">Přeskočit</button>
                 <button type="button" id="resetBtn" class="secondary">Znovu</button>
             </div>
         </div>
         <p id="lessonMeta" class="lesson-meta"><span id="metaBook"></span><span id="metaTitle"></span><span id="metaLength"></span></p>
+        <ol id="chapterList" class="chapters" aria-label="Kapitoly vybraného autora"></ol>
 
         <div class="stats">
             <div class="stat-box"><span class="stat-label">Slov za minutu</span><span class="stat-value" id="wpm">0</span></div>
@@ -39,7 +57,7 @@
             <button type="button" class="overlay" id="overlay">Klikněte sem nebo stiskněte Enter a začněte psát</button>
         </div>
 
-        <p class="instruction" id="instruction">Šedý text ještě čeká, zelený je správně, červený je chyba. Chyba zůstane v přesnosti i po smazání.</p>
+        <p class="instruction" id="instruction">Ještě nenapsaný text čeká, zelený je správně, červený je chyba. Chyba zůstane v přesnosti i po smazání. Po dopsání kapitoly stačí psát dál.</p>
         <p id="liveStatus" class="sr-only" aria-live="polite"></p>
         <pre id="debugPanel" class="debug-panel hidden" aria-hidden="true"></pre>
     </main>

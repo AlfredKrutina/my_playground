@@ -1,6 +1,30 @@
 const DEBUG = new URLSearchParams(location.search).has("debug");
+const ADVANCE_MS = 1200;
+const themeToggle = document.getElementById("themeToggle");
 
-const lessonSelect = document.getElementById("lessonSelect");
+function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    const dark = theme === "dark";
+    themeToggle.setAttribute("aria-pressed", String(dark));
+    themeToggle.setAttribute("aria-label", dark ? "Přepnout na světlý režim" : "Přepnout na tmavý režim");
+}
+
+applyTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
+
+themeToggle.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    localStorage.setItem("theme", next);
+    applyTheme(next);
+});
+
+if (!localStorage.getItem("theme")) {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
+        if (localStorage.getItem("theme")) return;
+        applyTheme(event.matches ? "dark" : "light");
+    });
+}
+
+const authorSelect = document.getElementById("authorSelect");
 const textContainer = document.getElementById("textContainer");
 const typingArea = document.getElementById("typingArea");
 const typingInput = document.getElementById("typingInput");
@@ -11,13 +35,16 @@ const progDisplay = document.getElementById("progress");
 const progressFill = document.getElementById("progressFill");
 const progressTrack = document.getElementById("progressTrack");
 const resetBtn = document.getElementById("resetBtn");
-const nextBtn = document.getElementById("nextBtn");
+const skipBtn = document.getElementById("skipBtn");
 const metaBook = document.getElementById("metaBook");
 const metaTitle = document.getElementById("metaTitle");
 const metaLength = document.getElementById("metaLength");
+const chapterList = document.getElementById("chapterList");
 const liveStatus = document.getElementById("liveStatus");
 const debugPanel = document.getElementById("debugPanel");
 
+let authorIndex = 0;
+let chapterIndex = 0;
 let currentText = "";
 let currentIndex = 0;
 let statuses = [];
@@ -25,46 +52,80 @@ let totalKeystrokes = 0;
 let mistakes = 0;
 let startTime = null;
 let interval = null;
-let isFinished = false;
+let phase = "ready";
 let keydownHandledChar = null;
 let backspaceFromKeydown = false;
+let advanceTimer = null;
+let pendingNext = null;
 
 function debugLog(eventName, detail) {
     if (!DEBUG) return;
     const payload = {
         event: eventName,
+        author: BOOKS[authorIndex] && BOOKS[authorIndex].id,
+        chapter: chapterIndex,
+        phase,
         index: currentIndex,
         expected: currentText[currentIndex] ?? null,
         keystrokes: totalKeystrokes,
         mistakes,
-        finished: isFinished,
         ...detail
     };
     console.debug("[staging]", payload);
     debugPanel.textContent = JSON.stringify(payload, null, 2);
 }
 
-BOOKS.forEach((book) => {
-    const group = document.createElement("optgroup");
-    group.label = book.label;
-    LESSONS.forEach((lesson, index) => {
-        if (lesson.book !== book.id) return;
-        const option = document.createElement("option");
-        option.value = String(index);
-        option.textContent = lesson.title;
-        group.appendChild(option);
-    });
-    lessonSelect.appendChild(group);
-});
-
-function bookLabel(bookId) {
-    const book = BOOKS.find((item) => item.id === bookId);
-    return book ? book.label : "";
+function lessonsFor(bookId) {
+    return LESSONS.filter((lesson) => lesson.book === bookId);
 }
 
-function initLesson(index) {
-    const lesson = LESSONS[Number(index)];
-    if (!lesson) return;
+function currentLesson() {
+    return lessonsFor(BOOKS[authorIndex].id)[chapterIndex];
+}
+
+function nextPosition() {
+    const chapters = lessonsFor(BOOKS[authorIndex].id);
+    if (chapterIndex + 1 < chapters.length) {
+        return { authorIndex, chapterIndex: chapterIndex + 1, authorChanged: false };
+    }
+    if (authorIndex + 1 < BOOKS.length) {
+        return { authorIndex: authorIndex + 1, chapterIndex: 0, authorChanged: true };
+    }
+    return null;
+}
+
+BOOKS.forEach((book, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = book.label;
+    authorSelect.appendChild(option);
+});
+
+function cancelAdvance() {
+    clearTimeout(advanceTimer);
+    advanceTimer = null;
+    pendingNext = null;
+}
+
+function renderChapters() {
+    const chapters = lessonsFor(BOOKS[authorIndex].id);
+    chapterList.replaceChildren();
+    chapters.forEach((lesson, index) => {
+        const item = document.createElement("li");
+        item.textContent = String(index + 1);
+        item.title = lesson.title;
+        if (index < chapterIndex) item.classList.add("is-done");
+        if (index === chapterIndex && phase !== "done") item.classList.add("is-current");
+        if (index === chapterIndex && phase === "done") item.classList.add("is-done");
+        chapterList.appendChild(item);
+    });
+}
+
+function loadChapter(nextAuthor, nextChapter, mode) {
+    cancelAdvance();
+    authorIndex = nextAuthor;
+    chapterIndex = nextChapter;
+    const lesson = currentLesson();
 
     currentText = lesson.text;
     currentIndex = 0;
@@ -72,22 +133,32 @@ function initLesson(index) {
     totalKeystrokes = 0;
     mistakes = 0;
     startTime = null;
-    isFinished = false;
     keydownHandledChar = null;
     clearInterval(interval);
     interval = null;
     typingInput.value = "";
+    phase = mode === "continue" ? "typing" : "ready";
 
-    lessonSelect.value = String(index);
-    nextBtn.disabled = Number(index) >= LESSONS.length - 1;
-    metaBook.textContent = bookLabel(lesson.book);
-    metaTitle.textContent = lesson.title;
+    authorSelect.value = String(authorIndex);
+    skipBtn.disabled = !nextPosition();
+    metaBook.textContent = BOOKS[authorIndex].label;
+    metaTitle.textContent = "Kapitola " + (chapterIndex + 1) + "/" + lessonsFor(BOOKS[authorIndex].id).length + " · " + lesson.title;
     metaLength.textContent = lesson.text.length + " znaků";
-    showStartOverlay();
+    renderChapters();
     updateStats();
     renderText();
-    liveStatus.textContent = "Lekce připravena. " + bookLabel(lesson.book) + ". " + lesson.title;
-    debugLog("init", { title: lesson.title, length: currentText.length });
+    liveStatus.textContent = "Kapitola připravena. " + BOOKS[authorIndex].label + ". " + lesson.title;
+
+    if (mode === "continue") {
+        overlay.classList.add("hidden");
+        overlay.classList.remove("overlay-done");
+        typingArea.classList.add("is-active");
+        typingInput.focus();
+    } else {
+        showStartOverlay();
+    }
+
+    debugLog("load", { mode, title: lesson.title });
 }
 
 function renderText() {
@@ -101,16 +172,14 @@ function renderText() {
         if (character === " ") span.classList.add("space");
         if (statuses[i] === "correct") span.classList.add("correct");
         if (statuses[i] === "incorrect") span.classList.add("incorrect");
-        if (i === currentIndex && !isFinished) span.classList.add("current");
+        if (i === currentIndex && phase === "typing") span.classList.add("current");
         fragment.appendChild(span);
     }
 
     textContainer.replaceChildren(fragment);
 
     const current = textContainer.querySelector(".current");
-    if (current) {
-        current.scrollIntoView({ block: "nearest", inline: "nearest" });
-    }
+    if (current) current.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 function updateStats() {
@@ -142,39 +211,68 @@ function ensureTimer() {
     debugLog("timer-start");
 }
 
-function finishLesson() {
-    if (isFinished) return;
-    isFinished = true;
-    clearInterval(interval);
-    interval = null;
-    const stats = updateStats();
-    const summary = "Hotovo. " + stats.wpm + " slov za minutu, přesnost " + stats.accuracy.toFixed(1) + " procent. Enter opakuje lekci, další lekce pokračuje dál.";
-    overlay.textContent = "Hotovo. " + stats.wpm + " slov za minutu, přesnost " + stats.accuracy.toFixed(1) + " %. Enter opakuje lekci, tlačítko Další lekce pokračuje.";
+function showAdvanceOverlay(stats, upcoming) {
+    const score = stats.wpm + " slov za minutu, přesnost " + stats.accuracy.toFixed(1) + " %.";
+    const nextLabel = upcoming.authorChanged
+        ? "Následuje " + BOOKS[upcoming.authorIndex].label + "."
+        : "Následuje kapitola: " + lessonsFor(BOOKS[upcoming.authorIndex].id)[upcoming.chapterIndex].title + ".";
+    overlay.textContent = "Kapitola hotová. " + score + " " + nextLabel;
     overlay.classList.remove("hidden");
     overlay.classList.add("overlay-done");
     typingArea.classList.remove("is-active");
-    liveStatus.textContent = summary;
+    liveStatus.textContent = overlay.textContent;
+}
+
+function finishChapter() {
+    if (phase !== "typing") return;
+    clearInterval(interval);
+    interval = null;
+    const stats = updateStats();
     renderText();
+    const upcoming = nextPosition();
     debugLog("finish", stats);
+
+    if (!upcoming) {
+        phase = "done";
+        skipBtn.disabled = true;
+        renderChapters();
+        overlay.textContent = "Všech osm autorů je hotových. Klepnutím začnete znovu od začátku.";
+        overlay.classList.remove("hidden");
+        overlay.classList.add("overlay-done");
+        typingArea.classList.remove("is-active");
+        liveStatus.textContent = overlay.textContent;
+        return;
+    }
+
+    phase = "advance";
+    pendingNext = upcoming;
+    showAdvanceOverlay(stats, upcoming);
+    advanceTimer = setTimeout(() => {
+        loadChapter(upcoming.authorIndex, upcoming.chapterIndex, "continue");
+    }, ADVANCE_MS);
 }
 
 function typeChar(character) {
-    if (isFinished || currentIndex >= currentText.length) return;
+    if (phase === "advance") {
+        const upcoming = pendingNext;
+        if (!upcoming) return;
+        loadChapter(upcoming.authorIndex, upcoming.chapterIndex, "continue");
+    }
+    if (phase !== "typing" || currentIndex >= currentText.length) return;
+
     ensureTimer();
     totalKeystrokes += 1;
-
     if (character === currentText[currentIndex]) {
         statuses[currentIndex] = "correct";
     } else {
         statuses[currentIndex] = "incorrect";
         mistakes += 1;
     }
-
     currentIndex += 1;
     debugLog("type", { character });
 
     if (currentIndex >= currentText.length) {
-        finishLesson();
+        finishChapter();
         return;
     }
 
@@ -185,12 +283,12 @@ function typeChar(character) {
 function typeString(value) {
     for (const character of value) {
         typeChar(character);
-        if (isFinished) break;
+        if (phase !== "typing") break;
     }
 }
 
 function backspace() {
-    if (isFinished || currentIndex === 0) return;
+    if (phase !== "typing" || currentIndex === 0) return;
     ensureTimer();
     currentIndex -= 1;
     statuses[currentIndex] = null;
@@ -206,8 +304,11 @@ function showStartOverlay() {
 }
 
 function focusTyping() {
+    if (phase === "done") return;
+    if (phase === "advance") return;
     typingInput.focus();
-    if (!isFinished && document.activeElement === typingInput) {
+    if (document.activeElement === typingInput) {
+        phase = "typing";
         overlay.classList.add("hidden");
         typingArea.classList.add("is-active");
     }
@@ -216,11 +317,11 @@ function focusTyping() {
 typingInput.addEventListener("keydown", (event) => {
     if (event.key === " ") event.preventDefault();
     if (event.ctrlKey || event.metaKey || event.altKey) return;
-
-    if (isFinished) return;
+    if (phase === "done" || phase === "ready") return;
 
     if (event.key === "Backspace") {
         event.preventDefault();
+        if (phase !== "typing") return;
         backspaceFromKeydown = true;
         backspace();
         setTimeout(() => {
@@ -240,14 +341,14 @@ typingInput.addEventListener("keydown", (event) => {
 typingInput.addEventListener("beforeinput", (event) => {
     if (event.inputType !== "deleteContentBackward") return;
     event.preventDefault();
-    if (backspaceFromKeydown || isFinished) return;
+    if (backspaceFromKeydown || phase !== "typing") return;
     backspace();
 });
 
 typingInput.addEventListener("input", () => {
     const value = typingInput.value;
     typingInput.value = "";
-    if (!value || isFinished) return;
+    if (!value || phase === "done" || phase === "ready") return;
     if (keydownHandledChar && value === keydownHandledChar) {
         keydownHandledChar = null;
         return;
@@ -257,18 +358,28 @@ typingInput.addEventListener("input", () => {
 });
 
 typingInput.addEventListener("focus", () => {
-    if (isFinished) return;
+    if (phase === "advance" || phase === "done") return;
+    phase = "typing";
     overlay.classList.add("hidden");
     typingArea.classList.add("is-active");
 });
 
 typingInput.addEventListener("blur", () => {
-    if (!isFinished) showStartOverlay();
+    if (phase === "typing") {
+        phase = "ready";
+        showStartOverlay();
+    }
 });
 
 overlay.addEventListener("click", () => {
-    if (isFinished) {
-        initLesson(lessonSelect.value);
+    if (phase === "done") {
+        loadChapter(0, 0, "ready");
+        focusTyping();
+        return;
+    }
+    if (phase === "advance" && pendingNext) {
+        loadChapter(pendingNext.authorIndex, pendingNext.chapterIndex, "continue");
+        return;
     }
     focusTyping();
 });
@@ -278,21 +389,20 @@ typingArea.addEventListener("click", (event) => {
     focusTyping();
 });
 
-lessonSelect.addEventListener("change", (event) => {
-    initLesson(event.target.value);
+authorSelect.addEventListener("change", (event) => {
+    loadChapter(Number(event.target.value), 0, "ready");
     focusTyping();
 });
 
 resetBtn.addEventListener("click", () => {
-    initLesson(lessonSelect.value);
+    loadChapter(authorIndex, chapterIndex, "ready");
     focusTyping();
 });
 
-nextBtn.addEventListener("click", () => {
-    const nextIndex = Number(lessonSelect.value) + 1;
-    if (nextIndex >= LESSONS.length) return;
-    initLesson(nextIndex);
-    focusTyping();
+skipBtn.addEventListener("click", () => {
+    const upcoming = phase === "advance" && pendingNext ? pendingNext : nextPosition();
+    if (!upcoming) return;
+    loadChapter(upcoming.authorIndex, upcoming.chapterIndex, "continue");
 });
 
 if (DEBUG) {
@@ -300,4 +410,4 @@ if (DEBUG) {
     debugLog("debug-on");
 }
 
-initLesson(0);
+loadChapter(0, 0, "ready");
